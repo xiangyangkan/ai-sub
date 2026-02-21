@@ -1,0 +1,46 @@
+sitemaps:
+  - name: Tech Twitter
+    category: Tech Tweets
+    notify_as: blog
+    sitemap_url: https://www.techtwitter.com/sitemap/tweets/0
+    path_prefixes:
+      - /tweet/
+    max_articles: 1
+    fetch_interval_minutes: 60
+
+  - name: Anthropic Engineering
+    category: Anthropic Engineering
+    notify_as: blog
+    sitemap_url: https://www.anthropic.com/sitemap.xml
+    path_prefixes:
+      - /research/
+      - /engineering/
+    max_articles: 3
+    fetch_interval_minutes: 120
+
+  - name: Anthropic News
+    category: AI News
+    notify_as: release
+    sitemap_url: https://www.anthropic.com/sitemap.xml
+    path_prefixes:
+      - /news/
+    max_articles: 3
+    fetch_interval_minutes: 10
+
+  - name: Google AI
+    category: AI News
+    notify_as: release
+    sitemap_url: https://blog.google/news-sitemap.xml
+    path_prefixes:
+      - /innovation-and-ai/models-and-research/
+    max_articles: 3
+    fetch_interval_minutes: 10
+
+  - name: OpenAI News
+    category: AI News
+    notify_as: release
+    sitemap_url: https://openai.com/sitemap.xml/product/
+    path_prefixes:
+      - /index/
+    max_articles: 3
+    fetch_interval_minutes: 10
