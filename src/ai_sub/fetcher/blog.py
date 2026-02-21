@@ -15,6 +15,7 @@ import httpx
 
 from ai_sub.config import settings
 from ai_sub.models import BlogArticle
+from ai_sub.url import normalize_url
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +57,8 @@ def _slugify(text: str) -> str:
 
 def _make_source_id(feed_title: str, entry_id: str) -> str:
     slug = _slugify(feed_title)
-    entry_hash = hashlib.md5(entry_id.encode()).hexdigest()[:12]
+    normalized = normalize_url(entry_id)
+    entry_hash = hashlib.md5(normalized.encode()).hexdigest()[:12]
     return f"blog:{slug}:{entry_hash}"
 
 
@@ -118,7 +120,7 @@ async def _fetch_single_feed(
         if not entry_id:
             continue
 
-        link = entry.get("link") or feed.html_url
+        link = normalize_url(entry.get("link") or feed.html_url)
         raw_summary = entry.get("summary") or ""
         summary_text = _strip_html(raw_summary)[:500]
         content_text = _strip_html(_extract_content(entry))[:3000]

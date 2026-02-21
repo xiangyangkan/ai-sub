@@ -15,6 +15,7 @@ import yaml
 
 from ai_sub.config import settings
 from ai_sub.models import BlogArticle
+from ai_sub.url import normalize_url
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +76,7 @@ def _slugify(text: str) -> str:
 
 def _make_source_id(source_name: str, url: str) -> str:
     slug = _slugify(source_name)
-    url_hash = hashlib.md5(url.encode()).hexdigest()[:12]
+    url_hash = hashlib.md5(normalize_url(url).encode()).hexdigest()[:12]
     return f"blog:{slug}:{url_hash}"
 
 
