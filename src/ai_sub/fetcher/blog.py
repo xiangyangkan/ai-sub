@@ -26,6 +26,7 @@ class FeedInfo:
     xml_url: str
     html_url: str
     category: str
+    notify_as: str = "blog"  # "blog" or "release"
 
 
 def parse_opml(path: str) -> list[FeedInfo]:
@@ -45,6 +46,7 @@ def parse_opml(path: str) -> list[FeedInfo]:
                 xml_url=xml_url,
                 html_url=feed_outline.get("htmlUrl") or "",
                 category=category,
+                notify_as=feed_outline.get("notifyAs") or "blog",
             ))
 
     logger.info("Parsed %d feeds from OPML: %s", len(feeds), path)
@@ -134,6 +136,7 @@ async def _fetch_single_feed(
             summary=summary_text or entry.get("title", ""),
             published_date=_parse_date(entry),
             content=content_text or None,
+            notify_as=feed.notify_as,
         ))
 
     return articles

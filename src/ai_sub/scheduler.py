@@ -111,13 +111,15 @@ async def fetch_and_notify_blogs() -> None:
     logger.info("Starting blog fetch cycle")
     all_articles = await fetch_all_blogs()
 
-    new_articles = [a for a in all_articles if not is_blog_seen(a.source_id)]
-    logger.info("Found %d new blog articles out of %d total", len(new_articles), len(all_articles))
+    # Split by notify_as: route "release" articles through release pipeline
+    blog_articles = [a for a in all_articles if a.notify_as != "release"]
+    release_articles = [a for a in all_articles if a.notify_as == "release"]
 
-    if not new_articles:
-        return
+    # Process blog articles
+    new_blogs = [a for a in blog_articles if not is_blog_seen(a.source_id)]
+    logger.info("Found %d new blog articles out of %d total", len(new_blogs), len(blog_articles))
 
-    for article in new_articles:
+    for article in new_blogs:
         filtered = await classify_blog_article(article)
         save_blog_article(filtered)
 
@@ -131,6 +133,34 @@ async def fetch_and_notify_blogs() -> None:
                 mark_blog_notified(filtered.source_id)
             except Exception as e:
                 logger.error("Failed to notify blog %s: %s", filtered.source_id, e, exc_info=True)
+
+    # Process release articles (from RSS feeds with notifyAs="release")
+    new_releases = [a for a in release_articles if not is_seen(a.source_id)]
+    logger.info("Found %d new release articles from RSS out of %d total", len(new_releases), len(release_articles))
+
+    for article in new_releases:
+        release_item = ReleaseItem(
+            source_id=article.source_id,
+            vendor=article.blog_name,
+            product=article.blog_name,
+            title=article.title,
+            url=article.url,
+            summary=article.summary,
+            published_date=article.published_date,
+            content=article.content,
+        )
+        filtered_release = await classify_and_translate(release_item)
+        save_release(filtered_release)
+
+        if not filtered_release.relevant:
+            continue
+
+        if filtered_release.importance in {Importance.HIGH, Importance.MEDIUM}:
+            try:
+                await notify_all(filtered_release)
+                mark_notified(filtered_release.source_id)
+            except Exception as e:
+                logger.error("Failed to notify release %s: %s", filtered_release.source_id, e, exc_info=True)
 
 
 async def fetch_and_notify_sitemap(source: SitemapSource) -> None:
