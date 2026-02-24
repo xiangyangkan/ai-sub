@@ -36,11 +36,3 @@ sitemaps:
     max_articles: 3
     fetch_interval_minutes: 10
 
-  - name: OpenAI News
-    category: AI News
-    notify_as: release
-    sitemap_url: https://openai.com/sitemap.xml/product/
-    path_prefixes:
-      - /index/
-    max_articles: 3
-    fetch_interval_minutes: 10

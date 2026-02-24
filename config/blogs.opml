@@ -234,6 +234,8 @@
         <outline text="AI and Machine Learning" title="AI and Machine Learning">
             <outline type="rss" text="OpenAI Blog" title="OpenAI Blog"
                 xmlUrl="https://openai.com/blog/rss.xml" htmlUrl="https://openai.com/blog" />
+            <outline type="rss" text="OpenAI News" title="OpenAI News"
+                xmlUrl="https://openai.com/news/rss.xml" htmlUrl="https://openai.com/news/" />
 <outline type="rss" text="DeepMind Blog" title="DeepMind Blog"
                 xmlUrl="https://deepmind.google/blog/rss.xml" htmlUrl="https://deepmind.google/blog/" />
             <outline type="rss" text="Hugging Face Blog" title="Hugging Face Blog"
