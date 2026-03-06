@@ -4,10 +4,18 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
-    # OpenAI (shared)
+    # LLM provider: "openai" or "anthropic"
+    llm_provider: str = "anthropic"
+
+    # OpenAI
     openai_api_key: str = ""
-    openai_model: str = "gpt-4o-mini"
+    openai_model: str = "gpt-5-mini"
     openai_base_url: str | None = None
+
+    # Anthropic
+    anthropic_api_key: str = ""
+    anthropic_model: str = "claude-sonnet-4-6"
+    anthropic_base_url: str | None = None
 
     # Telegram (shared)
     telegram_enabled: bool = True

@@ -1,12 +1,10 @@
-"""OpenAI-powered classification and translation."""
+"""LLM-powered classification and translation for releases."""
 from __future__ import annotations
 
-import json
 import logging
 
-from openai import AsyncOpenAI
-
 from ai_sub.config import settings
+from ai_sub.llm import chat_json
 from ai_sub.models import FilteredRelease, Importance, ReleaseItem
 
 logger = logging.getLogger(__name__)
@@ -39,7 +37,7 @@ AI编程相关性调整规则（在上述标准基础上做降级）：
 
 
 async def classify_and_translate(item: ReleaseItem) -> FilteredRelease:
-    """Classify importance and translate to Chinese using OpenAI."""
+    """Classify importance and translate to Chinese using LLM."""
     base = FilteredRelease(
         source_id=item.source_id,
         vendor=item.vendor,
@@ -51,8 +49,8 @@ async def classify_and_translate(item: ReleaseItem) -> FilteredRelease:
         published_date=item.published_date,
     )
 
-    if not settings.openai_api_key:
-        logger.warning("No OpenAI API key configured, using defaults")
+    if not settings.openai_api_key and not settings.anthropic_api_key:
+        logger.warning("No LLM API key configured, using defaults")
         return base
 
     user_msg = (
@@ -65,20 +63,7 @@ async def classify_and_translate(item: ReleaseItem) -> FilteredRelease:
     )
 
     try:
-        kwargs = {}
-        if settings.openai_base_url:
-            kwargs["base_url"] = settings.openai_base_url
-        client = AsyncOpenAI(api_key=settings.openai_api_key, **kwargs)
-        resp = await client.chat.completions.create(
-            model=settings.openai_model,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_msg},
-            ],
-            response_format={"type": "json_object"}
-        )
-        raw = resp.choices[0].message.content or "{}"
-        data = json.loads(raw)
+        data = await chat_json(SYSTEM_PROMPT, user_msg)
 
         base.relevant = data.get("relevant", True)
         if not base.relevant:
@@ -90,8 +75,7 @@ async def classify_and_translate(item: ReleaseItem) -> FilteredRelease:
         base.title_zh = data.get("title_zh", item.title)
         base.summary_zh = data.get("summary_zh", item.summary)
     except Exception as e:
-        logger.error("OpenAI classification failed for %s: %s", item.source_id, e)
-        # Fallback: medium importance, original text
+        logger.error("LLM classification failed for %s: %s", item.source_id, e)
         base.importance = Importance.MEDIUM
         base.title_zh = item.title
         base.summary_zh = item.summary

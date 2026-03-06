@@ -1,12 +1,10 @@
 """LLM-powered classification for blog articles (AI programming relevance)."""
 from __future__ import annotations
 
-import json
 import logging
 
-from openai import AsyncOpenAI
-
 from ai_sub.config import settings
+from ai_sub.llm import chat_json
 from ai_sub.models import BlogArticle, FilteredBlogArticle, Importance
 
 logger = logging.getLogger(__name__)
@@ -61,8 +59,8 @@ async def classify_blog_article(article: BlogArticle) -> FilteredBlogArticle:
         notify_as=article.notify_as,
     )
 
-    if not settings.openai_api_key:
-        logger.warning("No OpenAI API key configured, skipping blog classification")
+    if not settings.openai_api_key and not settings.anthropic_api_key:
+        logger.warning("No LLM API key configured, skipping blog classification")
         return base
 
     user_msg = (
@@ -74,20 +72,7 @@ async def classify_blog_article(article: BlogArticle) -> FilteredBlogArticle:
     )
 
     try:
-        kwargs = {}
-        if settings.openai_base_url:
-            kwargs["base_url"] = settings.openai_base_url
-        client = AsyncOpenAI(api_key=settings.openai_api_key, **kwargs)
-        resp = await client.chat.completions.create(
-            model=settings.openai_model,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_msg},
-            ],
-            response_format={"type": "json_object"},
-        )
-        raw = resp.choices[0].message.content or "{}"
-        data = json.loads(raw)
+        data = await chat_json(SYSTEM_PROMPT, user_msg)
 
         base.relevant = data.get("relevant", False)
         if not base.relevant:
