@@ -92,8 +92,36 @@ def _parse_lastmod(text: str | None) -> datetime | None:
         return None
 
 
-def _extract_meta(html: str) -> tuple[str, str]:
-    """Extract title and description from HTML page."""
+def _extract_published_date(html: str) -> datetime | None:
+    """Extract actual publication date from HTML metadata.
+
+    Checks (in priority order):
+    1. <meta property="article:published_time"> (Open Graph standard)
+    2. JSON-LD datePublished (Schema.org standard)
+    3. <time datetime="..."> element (common in blog templates)
+    """
+    for pattern in [
+        # Open Graph article:published_time
+        r'<meta\s+property=["\']article:published_time["\']\s+content=["\'](.*?)["\']',
+        r'<meta\s+content=["\'](.*?)["\']\s+property=["\']article:published_time["\']',
+        # JSON-LD datePublished
+        r'"datePublished"\s*:\s*"([^"]+)"',
+        # Embedded CMS publish date (Sanity, Contentful, etc.)
+        r'"publishedOn"\s*:\s*"([^"]+)"',
+        r'"publish_date"\s*:\s*"([^"]+)"',
+        # <time> element with datetime attribute
+        r'<time[^>]+datetime=["\'](\d{4}-\d{2}-\d{2}[T\d:+\-Z.]*)["\']',
+    ]:
+        m = re.search(pattern, html, re.IGNORECASE)
+        if m:
+            parsed = _parse_lastmod(m.group(1))
+            if parsed:
+                return parsed
+    return None
+
+
+def _extract_meta(html: str) -> tuple[str, str, datetime | None]:
+    """Extract title, description, and publication date from HTML page."""
     title = ""
     description = ""
 
@@ -114,7 +142,9 @@ def _extract_meta(html: str) -> tuple[str, str]:
             description = m.group(1).strip()
             break
 
-    return title, description
+    published_date = _extract_published_date(html)
+
+    return title, description, published_date
 
 
 async def fetch_sitemap_articles(
@@ -173,10 +203,11 @@ async def fetch_sitemap_articles(
 
     async def _fetch_page(url: str, lastmod: datetime | None) -> BlogArticle | None:
         async with semaphore:
+            published_date = None
             try:
                 resp = await client.get(url, timeout=20, follow_redirects=True)
                 resp.raise_for_status()
-                title, description = _extract_meta(resp.text)
+                title, description, published_date = _extract_meta(resp.text)
             except httpx.HTTPError as e:
                 logger.debug("Failed to fetch page %s: %s", url, e)
                 title, description = "", ""
@@ -192,7 +223,7 @@ async def fetch_sitemap_articles(
                 title=title,
                 url=url,
                 summary=description or title,
-                published_date=lastmod,
+                published_date=published_date or lastmod,
                 content=description[:3000] or None,
                 notify_as=source.notify_as,
             )
