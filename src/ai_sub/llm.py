@@ -66,7 +66,6 @@ async def _anthropic_chat(
 
     create_kwargs: dict = {
         "model": settings.anthropic_model,
-        "max_tokens": 1024,
         "thinking": {"type": "disabled"},
         "system": system_prompt,
         "messages": [
