@@ -35,6 +35,19 @@ AI编程相关性调整规则（在上述标准基础上做降级）：
 {"relevant": true|false, "importance": "high|medium|low", "category": "...", "title_zh": "...", "summary_zh": "..."}\
 """
 
+OUTPUT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "relevant": {"type": "boolean"},
+        "importance": {"type": "string", "enum": ["high", "medium", "low"]},
+        "category": {"type": "string"},
+        "title_zh": {"type": "string"},
+        "summary_zh": {"type": "string"},
+    },
+    "required": ["relevant", "importance", "category", "title_zh", "summary_zh"],
+    "additionalProperties": False,
+}
+
 
 async def classify_and_translate(item: ReleaseItem) -> FilteredRelease:
     """Classify importance and translate to Chinese using LLM."""
@@ -63,7 +76,7 @@ async def classify_and_translate(item: ReleaseItem) -> FilteredRelease:
     )
 
     try:
-        data = await chat_json(SYSTEM_PROMPT, user_msg)
+        data = await chat_json(SYSTEM_PROMPT, user_msg, output_schema=OUTPUT_SCHEMA)
 
         base.relevant = data.get("relevant", True)
         if not base.relevant:

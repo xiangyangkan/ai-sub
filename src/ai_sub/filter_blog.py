@@ -44,6 +44,19 @@ SYSTEM_PROMPT = """\
 {"relevant": true|false, "importance": "high|medium|low", "ai_category": "...", "title_zh": "...", "summary_zh": "..."}\
 """
 
+OUTPUT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "relevant": {"type": "boolean"},
+        "importance": {"type": "string", "enum": ["high", "medium", "low"]},
+        "ai_category": {"type": "string"},
+        "title_zh": {"type": "string"},
+        "summary_zh": {"type": "string"},
+    },
+    "required": ["relevant", "importance", "ai_category", "title_zh", "summary_zh"],
+    "additionalProperties": False,
+}
+
 
 async def classify_blog_article(article: BlogArticle) -> FilteredBlogArticle:
     """Classify a blog article for AI programming relevance using LLM."""
@@ -72,7 +85,7 @@ async def classify_blog_article(article: BlogArticle) -> FilteredBlogArticle:
     )
 
     try:
-        data = await chat_json(SYSTEM_PROMPT, user_msg)
+        data = await chat_json(SYSTEM_PROMPT, user_msg, output_schema=OUTPUT_SCHEMA)
 
         base.relevant = data.get("relevant", False)
         if not base.relevant:
