@@ -37,7 +37,6 @@ async def _openai_chat(system_prompt: str, user_message: str) -> dict:
     client = AsyncOpenAI(api_key=settings.openai_api_key, **kwargs)
     resp = await client.chat.completions.create(
         model=settings.openai_model,
-        max_tokens=65536,
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_message},
@@ -67,6 +66,7 @@ async def _anthropic_chat(
 
     create_kwargs: dict = {
         "model": settings.anthropic_model,
+        "max_tokens": 65536,
         "thinking": {"type": "disabled"},
         "system": system_prompt,
         "messages": [
