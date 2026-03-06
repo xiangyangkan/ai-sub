@@ -37,6 +37,7 @@ async def _openai_chat(system_prompt: str, user_message: str) -> dict:
     client = AsyncOpenAI(api_key=settings.openai_api_key, **kwargs)
     resp = await client.chat.completions.create(
         model=settings.openai_model,
+        max_tokens=65536,
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_message},
