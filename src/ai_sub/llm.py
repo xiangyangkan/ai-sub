@@ -42,6 +42,7 @@ async def _openai_chat(system_prompt: str, user_message: str) -> dict:
             {"role": "user", "content": user_message},
         ],
         response_format={"type": "json_object"},
+        reasoning_effort="none",
     )
     raw = resp.choices[0].message.content or "{}"
     return json.loads(raw)
@@ -66,6 +67,7 @@ async def _anthropic_chat(
     create_kwargs: dict = {
         "model": settings.anthropic_model,
         "max_tokens": 1024,
+        "thinking": {"type": "disabled"},
         "system": system_prompt,
         "messages": [
             {"role": "user", "content": user_message},
