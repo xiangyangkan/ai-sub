@@ -17,6 +17,7 @@ sitemaps:
       - /engineering/
     max_articles: 3
     fetch_interval_minutes: 120
+    max_age_hours: 48
 
   - name: Anthropic News
     category: AI News
@@ -26,6 +27,7 @@ sitemaps:
       - /news/
     max_articles: 3
     fetch_interval_minutes: 10
+    max_age_hours: 48
 
   - name: Google AI
     category: AI News
@@ -35,4 +37,5 @@ sitemaps:
       - /innovation-and-ai/models-and-research/
     max_articles: 3
     fetch_interval_minutes: 10
+    max_age_hours: 48
 

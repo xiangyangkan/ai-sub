@@ -7,7 +7,7 @@ import logging
 import re
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
 
 import httpx
@@ -43,6 +43,7 @@ class SitemapSource:
     max_articles: int = 10
     notify_as: str = "blog"  # "blog" or "release"
     fetch_interval_minutes: int = 0  # 0 = use global default
+    max_age_hours: int = 48  # 0 = no age filtering
 
 
 def load_sitemap_sources(path: str) -> list[SitemapSource]:
@@ -64,6 +65,7 @@ def load_sitemap_sources(path: str) -> list[SitemapSource]:
             max_articles=item.get("max_articles", 10),
             notify_as=item.get("notify_as", "blog"),
             fetch_interval_minutes=item.get("fetch_interval_minutes", 0),
+            max_age_hours=item.get("max_age_hours", 48),
         ))
 
     logger.info("Loaded %d sitemap sources from %s", len(sources), path)
@@ -236,5 +238,14 @@ async def fetch_sitemap_articles(
             articles.append(result)
         elif isinstance(result, Exception):
             logger.debug("Page fetch error: %s", result)
+
+    # Filter out articles older than max_age_hours
+    if source.max_age_hours > 0:
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=source.max_age_hours)
+        before = len(articles)
+        articles = [a for a in articles if a.published_date is None or a.published_date >= cutoff]
+        skipped = before - len(articles)
+        if skipped:
+            logger.info("Filtered %d old articles from %s (cutoff: %s)", skipped, source.name, cutoff.isoformat())
 
     return articles
