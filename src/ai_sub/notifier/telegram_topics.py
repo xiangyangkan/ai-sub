@@ -25,6 +25,9 @@ TOPIC_DEFS: dict[str, tuple[str, int]] = {
     "blog_high":      ("AI博客 - 重要",       0xFB6F5F),  # red
     "blog_medium":    ("AI博客 - 关注",       0x6FB9F0),  # blue
     "blog_digest":    ("AI博客 - 每日摘要",   0xCB86DB),  # purple
+    "youtube_high":   ("AI视频 - 重要",       0xFB6F5F),  # red
+    "youtube_medium": ("AI视频 - 关注",       0x6FB9F0),  # blue
+    "youtube_digest": ("AI视频 - 每日摘要",   0xFFD67E),  # yellow
 }
 
 _topic_cache: dict[str, int] = {}

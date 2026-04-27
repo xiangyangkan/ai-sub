@@ -13,6 +13,7 @@ from ai_sub.scheduler import (
     fetch_and_notify,
     fetch_and_notify_blogs,
     fetch_and_notify_sitemap,
+    fetch_and_notify_youtube,
 )
 from ai_sub.fetcher.sitemap import load_sitemap_sources
 
@@ -57,6 +58,13 @@ async def _run() -> None:
                 await fetch_and_notify_sitemap(source)
             except Exception as e:
                 logger.error("Initial sitemap fetch failed for %s: %s", source.name, e)
+
+    if settings.youtube_enabled:
+        logger.info("Running initial YouTube fetch...")
+        try:
+            await fetch_and_notify_youtube()
+        except Exception as e:
+            logger.error("Initial YouTube fetch failed: %s", e)
 
     # Wait for shutdown signal
     stop = asyncio.Event()

@@ -2,7 +2,7 @@ import asyncio
 import logging
 
 from ai_sub.config import settings
-from ai_sub.models import FilteredBlogArticle, FilteredRelease
+from ai_sub.models import FilteredBlogArticle, FilteredRelease, FilteredYouTubeVideo
 from ai_sub.notifier.telegram import send_telegram
 from ai_sub.notifier.feishu import send_feishu
 
@@ -87,3 +87,45 @@ async def notify_blog_digest(text_html: str, card_elements: list[dict]) -> None:
     for r in results:
         if isinstance(r, Exception):
             logger.error("Blog digest notification failed: %s", r, exc_info=r)
+
+
+async def notify_youtube(video: FilteredYouTubeVideo) -> None:
+    tasks: list[asyncio.Task] = []
+    if settings.telegram_enabled and settings.telegram_bot_token and settings.telegram_chat_id:
+        from ai_sub.notifier.telegram import send_telegram_youtube
+        tasks.append(asyncio.create_task(send_telegram_youtube(video)))
+    if settings.feishu_enabled and settings.feishu_youtube_webhook_url:
+        from ai_sub.notifier.feishu import send_feishu_youtube
+        tasks.append(asyncio.create_task(send_feishu_youtube(video)))
+    if not tasks:
+        logger.debug("No YouTube notification channels configured")
+        return
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    for r in results:
+        if isinstance(r, Exception):
+            logger.error("YouTube notification failed: %s", r, exc_info=r)
+
+
+async def notify_youtube_digest(text_html: str, card_elements: list[dict]) -> None:
+    tasks: list[asyncio.Task] = []
+    if settings.telegram_enabled and settings.telegram_bot_token and settings.telegram_chat_id:
+        from ai_sub.notifier.telegram import send_telegram_raw
+        from ai_sub.notifier.telegram_topics import get_thread_id
+        thread_id = get_thread_id("youtube", "digest")
+        tasks.append(asyncio.create_task(
+            send_telegram_raw(text_html, message_thread_id=thread_id)
+        ))
+    if settings.feishu_enabled and settings.feishu_youtube_webhook_url:
+        from ai_sub.notifier.feishu import send_feishu_youtube_card
+        tasks.append(asyncio.create_task(send_feishu_youtube_card(
+            title="AI视频每日精选",
+            header_color="turquoise",
+            elements=card_elements,
+        )))
+    if not tasks:
+        logger.debug("No YouTube digest notification channels configured")
+        return
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    for r in results:
+        if isinstance(r, Exception):
+            logger.error("YouTube digest notification failed: %s", r, exc_info=r)

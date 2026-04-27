@@ -14,6 +14,7 @@ async def chat_json(
     user_message: str,
     *,
     output_schema: dict | None = None,
+    max_tokens: int = 1024,
 ) -> dict:
     """Send a chat completion request and return parsed JSON.
 
@@ -21,11 +22,11 @@ async def chat_json(
     """
     provider = settings.llm_provider.lower()
     if provider == "anthropic":
-        return await _anthropic_chat(system_prompt, user_message, output_schema=output_schema)
-    return await _openai_chat(system_prompt, user_message)
+        return await _anthropic_chat(system_prompt, user_message, output_schema=output_schema, max_tokens=max_tokens)
+    return await _openai_chat(system_prompt, user_message, max_tokens=max_tokens)
 
 
-async def _openai_chat(system_prompt: str, user_message: str) -> dict:
+async def _openai_chat(system_prompt: str, user_message: str, *, max_tokens: int = 1024) -> dict:
     from openai import AsyncOpenAI
 
     if not settings.openai_api_key:
@@ -53,6 +54,7 @@ async def _anthropic_chat(
     user_message: str,
     *,
     output_schema: dict | None = None,
+    max_tokens: int = 1024,
 ) -> dict:
     from anthropic import AsyncAnthropic
 
@@ -66,7 +68,7 @@ async def _anthropic_chat(
 
     create_kwargs: dict = {
         "model": settings.anthropic_model,
-        "max_tokens": 1024,
+        "max_tokens": max_tokens,
         "thinking": {"type": "disabled"},
         "system": system_prompt,
         "messages": [

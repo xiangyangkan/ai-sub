@@ -7,7 +7,7 @@ from functools import lru_cache
 import httpx
 
 from ai_sub.config import settings
-from ai_sub.models import FilteredBlogArticle, FilteredRelease, Importance
+from ai_sub.models import FilteredBlogArticle, FilteredRelease, FilteredYouTubeVideo, Importance
 
 logger = logging.getLogger(__name__)
 
@@ -174,3 +174,76 @@ async def send_feishu_blog_card(
         },
     }
     await _post_webhook(payload, webhook_url=settings.feishu_blog_webhook_url)
+
+
+def _build_youtube_card(v: FilteredYouTubeVideo) -> dict:
+    color = IMPORTANCE_COLOR.get(v.importance, "yellow")
+    label = IMPORTANCE_LABEL.get(v.importance, IMPORTANCE_LABEL[Importance.MEDIUM])
+    title = v.title_zh or v.title
+    summary = v.summary_zh or v.description[:300]
+    cat_tag = f"[{v.ai_category}] " if v.ai_category else ""
+    meta = v.channel_name
+
+    elements = [
+        {
+            "tag": "div",
+            "text": {"tag": "lark_md", "content": f"**{label}** | {cat_tag}*{meta}*"},
+        },
+        {"tag": "hr"},
+        {
+            "tag": "div",
+            "text": {"tag": "lark_md", "content": summary},
+        },
+    ]
+
+    if v.key_points:
+        elements.append({
+            "tag": "div",
+            "text": {"tag": "lark_md", "content": f"**要点：**\n{v.key_points}"},
+        })
+
+    elements.append({
+        "tag": "action",
+        "actions": [
+            {
+                "tag": "button",
+                "text": {"tag": "plain_text", "content": "观看视频"},
+                "url": v.url,
+                "type": "default",
+            }
+        ],
+    })
+
+    return {
+        "msg_type": "interactive",
+        "card": {
+            "config": {"wide_screen_mode": True, "enable_forward": True},
+            "header": {
+                "title": {"tag": "plain_text", "content": title},
+                "template": color,
+            },
+            "elements": elements,
+        },
+    }
+
+
+async def send_feishu_youtube(video: FilteredYouTubeVideo) -> None:
+    card = _build_youtube_card(video)
+    await _post_webhook(card, webhook_url=settings.feishu_youtube_webhook_url)
+
+
+async def send_feishu_youtube_card(
+    title: str, header_color: str, elements: list[dict]
+) -> None:
+    payload = {
+        "msg_type": "interactive",
+        "card": {
+            "config": {"wide_screen_mode": True, "enable_forward": True},
+            "header": {
+                "title": {"tag": "plain_text", "content": title},
+                "template": header_color,
+            },
+            "elements": elements,
+        },
+    }
+    await _post_webhook(payload, webhook_url=settings.feishu_youtube_webhook_url)

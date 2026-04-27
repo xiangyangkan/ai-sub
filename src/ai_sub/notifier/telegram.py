@@ -8,7 +8,7 @@ from functools import lru_cache
 import httpx
 
 from ai_sub.config import settings
-from ai_sub.models import FilteredBlogArticle, FilteredRelease, Importance
+from ai_sub.models import FilteredBlogArticle, FilteredRelease, FilteredYouTubeVideo, Importance
 from ai_sub.notifier.telegram_topics import get_thread_id
 
 logger = logging.getLogger(__name__)
@@ -143,4 +143,40 @@ async def send_telegram_blog(article: FilteredBlogArticle) -> None:
     text = _format_blog_article(article)
     source = article.notify_as if article.notify_as in ("blog", "release") else "blog"
     thread_id = get_thread_id(source, article.importance.value)
+    await send_telegram_raw(text, message_thread_id=thread_id)
+
+
+def _format_youtube_video(v: FilteredYouTubeVideo) -> str:
+    label = IMPORTANCE_LABEL.get(v.importance, IMPORTANCE_LABEL[Importance.MEDIUM])
+    e = html.escape
+    title = v.title_zh or v.title
+    summary = v.summary_zh or v.description[:300]
+    cat_tag = f"[{e(v.ai_category)}] " if v.ai_category else ""
+    meta = e(v.channel_name)
+
+    lines = [
+        f"{label}",
+        f"<b>{cat_tag}{e(title)}</b>",
+        f"<i>{meta}</i>",
+        "",
+        e(summary),
+    ]
+
+    if v.key_points:
+        lines.append("")
+        lines.append("<b>要点：</b>")
+        for point in v.key_points.strip().split("\n"):
+            point = point.strip()
+            if point:
+                lines.append(e(point))
+
+    lines.append("")
+    lines.append(f'<a href="{e(v.url)}">观看视频</a>')
+
+    return "\n".join(lines)
+
+
+async def send_telegram_youtube(video: FilteredYouTubeVideo) -> None:
+    text = _format_youtube_video(video)
+    thread_id = get_thread_id("youtube", video.importance.value)
     await send_telegram_raw(text, message_thread_id=thread_id)

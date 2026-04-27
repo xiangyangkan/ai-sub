@@ -61,6 +61,16 @@ class Settings(BaseSettings):
     # Blog 通知频道
     feishu_blog_webhook_url: str = ""
 
+    # ── YouTube 数据源 ──
+    youtube_enabled: bool = True
+    youtube_channels_path: str = "config/youtube_channels.yaml"
+    youtube_fetch_interval_minutes: int = 120
+    youtube_max_videos_per_channel: int = 5
+    youtube_digest_hour_utc: int = 3  # 11 AM Beijing = 3 AM UTC
+
+    # YouTube 通知频道
+    feishu_youtube_webhook_url: str = ""
+
     log_level: str = "INFO"
 
     @property

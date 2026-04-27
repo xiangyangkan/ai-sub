@@ -71,3 +71,36 @@ class FilteredBlogArticle(BaseModel):
     title_zh: str = ""
     summary_zh: str = ""
     notify_as: str = "blog"   # "blog" 或 "release"，控制通知路由
+
+
+class YouTubeVideo(BaseModel):
+    """YouTube RSS 抓取的原始视频信息"""
+    source_id: str          # "yt:{channel_slug}:{video_id}"
+    video_id: str
+    channel_name: str
+    category: str
+    title: str
+    url: str
+    description: str = ""
+    published_date: datetime | None = None
+    transcript: str | None = None
+    transcript_segments: list[dict] | None = None
+
+
+class FilteredYouTubeVideo(BaseModel):
+    """LLM 处理后的 YouTube 视频"""
+    source_id: str
+    video_id: str
+    channel_name: str
+    category: str
+    title: str
+    url: str
+    description: str = ""
+    published_date: datetime | None = None
+    relevant: bool = True
+    importance: Importance = Importance.MEDIUM
+    ai_category: str = ""
+    title_zh: str = ""
+    summary_zh: str = ""
+    key_points: str = ""
+    timeline_outline: str = ""

@@ -12,13 +12,16 @@ from apscheduler.triggers.interval import IntervalTrigger
 from ai_sub.config import settings
 from ai_sub.digest_blog import build_feishu_blog_digest_elements, build_telegram_blog_digest
 from ai_sub.digest_release import build_feishu_digest_elements, build_telegram_digest
+from ai_sub.digest_youtube import build_feishu_youtube_digest_elements, build_telegram_youtube_digest
 from ai_sub.fetcher.blog import fetch_all_blogs
 from ai_sub.fetcher.releasebot import fetch_vendor
 from ai_sub.fetcher.sitemap import SITEMAP_HEADERS, SitemapSource, fetch_sitemap_articles, load_sitemap_sources
+from ai_sub.fetcher.youtube import fetch_transcript, fetch_youtube_videos
 from ai_sub.filter_blog import classify_blog_article
 from ai_sub.filter_release import classify_and_translate
+from ai_sub.filter_youtube import classify_and_summarize_video
 from ai_sub.models import Importance, ReleaseItem
-from ai_sub.notifier import notify_all, notify_blog, notify_blog_digest, notify_digest
+from ai_sub.notifier import notify_all, notify_blog, notify_blog_digest, notify_digest, notify_youtube, notify_youtube_digest
 from ai_sub.store_blog import (
     cleanup_old_blogs,
     get_undigested_blogs,
@@ -34,6 +37,14 @@ from ai_sub.store_release import (
     mark_digested,
     mark_notified,
     save_release,
+)
+from ai_sub.store_youtube import (
+    cleanup_old_youtube,
+    get_undigested_youtube,
+    is_youtube_seen,
+    mark_youtube_digested,
+    mark_youtube_notified,
+    save_youtube_video,
 )
 
 logger = logging.getLogger(__name__)
@@ -262,12 +273,69 @@ async def daily_blog_digest() -> None:
     mark_blogs_digested([a["source_id"] for a in articles])
 
 
+async def fetch_and_notify_youtube() -> None:
+    """Fetch YouTube videos, get transcripts, classify, summarize, and notify."""
+    if not settings.youtube_enabled:
+        return
+
+    logger.info("Starting YouTube fetch cycle")
+    all_videos = await fetch_youtube_videos()
+
+    new_videos = [v for v in all_videos if not is_youtube_seen(v.source_id)]
+    logger.info("Found %d new YouTube videos out of %d total", len(new_videos), len(all_videos))
+
+    if not new_videos:
+        return
+
+    for i, video in enumerate(new_videos):
+        if i > 0:
+            await asyncio.sleep(5)
+        transcript, segments = await fetch_transcript(video.video_id)
+        video.transcript = transcript
+        video.transcript_segments = segments
+
+        filtered = await classify_and_summarize_video(video)
+        save_youtube_video(filtered)
+
+        if not filtered.relevant:
+            continue
+
+        if filtered.importance in {Importance.HIGH, Importance.MEDIUM}:
+            try:
+                await notify_youtube(filtered)
+                mark_youtube_notified(filtered.source_id)
+            except Exception as e:
+                logger.error("Failed to notify YouTube %s: %s", filtered.source_id, e, exc_info=True)
+
+
+async def daily_youtube_digest() -> None:
+    """Send daily digest of YouTube videos."""
+    if not settings.youtube_enabled:
+        return
+
+    logger.info("Building daily YouTube digest")
+    videos = get_undigested_youtube(since_hours=24)
+    if not videos:
+        logger.info("No YouTube videos for digest")
+        return
+
+    tg_text = build_telegram_youtube_digest(videos)
+    feishu_elements = build_feishu_youtube_digest_elements(videos)
+    await notify_youtube_digest(tg_text, feishu_elements)
+    logger.info("Daily YouTube digest sent with %d videos", len(videos))
+
+    mark_youtube_digested([v["source_id"] for v in videos])
+
+
 async def weekly_cleanup() -> None:
     deleted = cleanup_old(days=30)
     logger.info("Cleaned up %d old release entries", deleted)
     if settings.blog_enabled:
         deleted_blogs = cleanup_old_blogs(days=30)
         logger.info("Cleaned up %d old blog entries", deleted_blogs)
+    if settings.youtube_enabled:
+        deleted_youtube = cleanup_old_youtube(days=30)
+        logger.info("Cleaned up %d old YouTube entries", deleted_youtube)
 
 
 def create_scheduler() -> AsyncIOScheduler:
@@ -328,6 +396,23 @@ def create_scheduler() -> AsyncIOScheduler:
                 name=f"Fetch sitemap: {source.name} (every {interval}min)",
                 max_instances=1,
             )
+
+    # YouTube tasks
+    if settings.youtube_enabled:
+        scheduler.add_job(
+            fetch_and_notify_youtube,
+            trigger=IntervalTrigger(minutes=settings.youtube_fetch_interval_minutes),
+            id="fetch_and_notify_youtube",
+            name="Fetch and notify YouTube videos",
+            max_instances=1,
+        )
+
+        scheduler.add_job(
+            daily_youtube_digest,
+            trigger=CronTrigger(hour=settings.youtube_digest_hour_utc, minute=0),
+            id="daily_youtube_digest",
+            name="Daily YouTube video digest",
+        )
 
     # Weekly cleanup on Sunday at 3 AM UTC
     scheduler.add_job(

@@ -1,0 +1,12 @@
+channels:
+  - name: "Andrej Karpathy"
+    channel_id: "UCXUPKJO5MZQN11PqgIvyuvQ"
+    category: "AI研究"
+
+  - name: "Lenny's Podcast"
+    channel_id: "UC6t1O76G0jYXOAoYCm153dA"
+    category: "产品与技术"
+
+  - name: "Cleo Abram"
+    channel_id: "UC415bOPUcGSamy543abLmRA"
+    category: "科技科普"
