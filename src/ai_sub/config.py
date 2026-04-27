@@ -68,6 +68,10 @@ class Settings(BaseSettings):
     youtube_max_videos_per_channel: int = 5
     youtube_digest_hour_utc: int = 3  # 11 AM Beijing = 3 AM UTC
 
+    # YouTube proxy (Webshare residential rotating proxy)
+    youtube_proxy_username: str = ""
+    youtube_proxy_password: str = ""
+
     # YouTube 通知频道
     feishu_youtube_webhook_url: str = ""
 

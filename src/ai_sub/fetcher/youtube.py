@@ -156,15 +156,29 @@ async def fetch_youtube_videos() -> list[YouTubeVideo]:
 _transcript_lock = asyncio.Lock()
 
 
+def _build_transcript_api() -> "YouTubeTranscriptApi":
+    from youtube_transcript_api import YouTubeTranscriptApi
+
+    if settings.youtube_proxy_username and settings.youtube_proxy_password:
+        from youtube_transcript_api.proxies import WebshareProxyConfig
+
+        proxy = WebshareProxyConfig(
+            proxy_username=settings.youtube_proxy_username,
+            proxy_password=settings.youtube_proxy_password,
+        )
+        return YouTubeTranscriptApi(proxy_config=proxy)
+
+    return YouTubeTranscriptApi()
+
+
 async def fetch_transcript(video_id: str) -> tuple[str, list[dict]]:
     """Fetch transcript using youtube-transcript-api. Returns (plain_text, segments).
 
     Uses a lock + delay to serialize requests and avoid YouTube IP blocks.
     """
-    from youtube_transcript_api import YouTubeTranscriptApi
 
     def _sync_fetch() -> tuple[str, list[dict]]:
-        ytt = YouTubeTranscriptApi()
+        ytt = _build_transcript_api()
         transcript = ytt.fetch(
             video_id,
             languages=["zh-Hans", "zh-Hant", "zh", "en"],
