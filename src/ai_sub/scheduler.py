@@ -291,6 +291,9 @@ async def fetch_and_notify_youtube() -> None:
         if i > 0:
             await asyncio.sleep(5)
         transcript, segments = await fetch_transcript(video.video_id)
+        if not transcript:
+            logger.warning("Skipping %s (no transcript), will retry next cycle", video.source_id)
+            continue
         video.transcript = transcript
         video.transcript_segments = segments
 
