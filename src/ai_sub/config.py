@@ -42,8 +42,8 @@ class Settings(BaseSettings):
     # t0: push all (high/medium/low)
     # t1: push high + medium
     # t2: push high only
-    vendors_t0: list[str] = ["openai", "anthropic", "google"]
-    vendors_t1: list[str] = ["xai", "meta", "deepseek", "qwen", "minimax", "zai", "volcengine", "cursor"]
+    vendors_t0: list[str] = ["openai", "anthropic", "google", "codex", "openclaw"]
+    vendors_t1: list[str] = ["xai", "meta", "deepseek", "qwen", "kimi", "minimax", "zai", "volcengine", "cursor", "eleven-labs", "huggingface"]
     vendors_t2: list[str] = ["vercel"]
 
     # ── Sitemap 数据源 ──
