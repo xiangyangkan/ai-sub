@@ -181,7 +181,7 @@ async def fetch_transcript(video_id: str) -> tuple[str, list[dict]]:
         ytt = _build_transcript_api()
         transcript = ytt.fetch(
             video_id,
-            languages=["zh-Hans", "zh-Hant", "zh", "en"],
+            languages=["en", "en-US", "en-GB", "en-AU", "en-CA", "en-IE", "en-IN", "zh-Hans", "zh-Hant", "zh"],
         )
         segments = [{"start": s.start, "text": s.text} for s in transcript]
         plain = " ".join(s.text for s in transcript)
