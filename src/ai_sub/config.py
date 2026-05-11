@@ -68,6 +68,10 @@ class Settings(BaseSettings):
     youtube_max_videos_per_channel: int = 1
     youtube_digest_hour_utc: int = 3  # 11 AM Beijing = 3 AM UTC
 
+    # YouTube Whisper fallback (when subtitles are disabled)
+    youtube_whisper_fallback: bool = True
+    whisper_model: str = "whisper-1"
+
     # YouTube proxy (Webshare residential rotating proxy)
     youtube_proxy_username: str = ""
     youtube_proxy_password: str = ""

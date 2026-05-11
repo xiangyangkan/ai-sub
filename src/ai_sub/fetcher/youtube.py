@@ -4,10 +4,13 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
+import os
 import re
+import tempfile
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from pathlib import Path
 
 import httpx
 import yaml
@@ -171,8 +174,81 @@ def _build_transcript_api() -> "YouTubeTranscriptApi":
     return YouTubeTranscriptApi()
 
 
+def _whisper_transcribe_sync(video_id: str) -> tuple[str, list[dict]]:
+    """Download audio via yt-dlp and transcribe with OpenAI Whisper API."""
+    import yt_dlp
+    from openai import OpenAI
+
+    tmp_dir = tempfile.mkdtemp()
+    audio_path = os.path.join(tmp_dir, f"{video_id}.m4a")
+
+    try:
+        ydl_opts = {
+            "format": "ba[filesize<25M]/ba[abr<=64]/ba",
+            "outtmpl": os.path.join(tmp_dir, f"{video_id}.%(ext)s"),
+            "postprocessors": [{
+                "key": "FFmpegExtractAudio",
+                "preferredcodec": "m4a",
+            }],
+            "quiet": True,
+            "no_warnings": True,
+        }
+
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([f"https://www.youtube.com/watch?v={video_id}"])
+
+        audio_file = Path(tmp_dir) / f"{video_id}.m4a"
+        if not audio_file.exists():
+            for f in Path(tmp_dir).iterdir():
+                if f.suffix in (".m4a", ".mp3", ".opus", ".webm", ".wav"):
+                    audio_file = f
+                    break
+
+        if not audio_file.exists():
+            logger.warning("yt-dlp produced no audio file for %s", video_id)
+            return "", []
+
+        if audio_file.stat().st_size > 25 * 1024 * 1024:
+            logger.warning("Audio file too large for Whisper API (%s): %d bytes",
+                           video_id, audio_file.stat().st_size)
+            return "", []
+
+        client_kwargs = {}
+        if settings.openai_api_key:
+            client_kwargs["api_key"] = settings.openai_api_key
+        if settings.openai_base_url:
+            client_kwargs["base_url"] = settings.openai_base_url
+
+        client = OpenAI(**client_kwargs)
+
+        with open(audio_file, "rb") as af:
+            response = client.audio.transcriptions.create(
+                model=settings.whisper_model,
+                file=af,
+                response_format="verbose_json",
+                timestamp_granularities=["segment"],
+            )
+
+        segments = []
+        plain_parts = []
+        for seg in response.segments or []:
+            segments.append({"start": seg["start"], "text": seg["text"].strip()})
+            plain_parts.append(seg["text"].strip())
+
+        plain = " ".join(plain_parts) if plain_parts else (response.text or "")
+        if not segments and response.text:
+            segments = [{"start": 0.0, "text": response.text}]
+
+        return plain, segments
+
+    finally:
+        for f in Path(tmp_dir).iterdir():
+            f.unlink(missing_ok=True)
+        os.rmdir(tmp_dir)
+
+
 async def fetch_transcript(video_id: str) -> tuple[str, list[dict]]:
-    """Fetch transcript using youtube-transcript-api. Returns (plain_text, segments).
+    """Fetch transcript using youtube-transcript-api, with Whisper fallback.
 
     Uses a lock + delay to serialize requests and avoid YouTube IP blocks.
     """
@@ -194,5 +270,17 @@ async def fetch_transcript(video_id: str) -> tuple[str, list[dict]]:
             return result
         except Exception as e:
             logger.warning("Failed to fetch transcript for %s: %s", video_id, e)
-            await asyncio.sleep(3)
-            return "", []
+
+        if settings.youtube_whisper_fallback and settings.openai_api_key:
+            logger.info("Attempting Whisper fallback for %s", video_id)
+            try:
+                result = await asyncio.to_thread(_whisper_transcribe_sync, video_id)
+                await asyncio.sleep(3)
+                if result[0]:
+                    logger.info("Whisper transcription successful for %s", video_id)
+                    return result
+            except Exception as e:
+                logger.warning("Whisper fallback failed for %s: %s", video_id, e)
+
+        await asyncio.sleep(3)
+        return "", []
