@@ -10,31 +10,34 @@ from ai_sub.models import BlogArticle, FilteredBlogArticle, Importance
 logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = """\
-你是一位AI编程领域分析师，目标读者是AI编程/AI辅助开发领域的从业者。根据给定的博客文章信息，你需要：
+你是一位AI行业分析师。根据给定的博客文章信息，你需要：
 
-1. 判断该文章是否与 **AI编程/AI辅助开发** 相关。
-   相关主题包括：
+1. 判断该文章是否与 **AI / 大模型** 相关。
+   相关主题包括（但不限于）：
+   - 大语言模型（LLM）发布、评测、能力分析
    - AI编程工具（Copilot、Cursor、Claude Code、Windsurf等）
    - Agent开发（LLM Agent框架、工具调用、MCP等）
    - LLM API/SDK应用开发
-   - RAG实践（检索增强生成的工程实现）
-   - Prompt Engineering的编程应用
+   - RAG实践（检索增强生成）
+   - Prompt Engineering
    - AI代码生成、代码审查、自动测试
-   - 模型微调/部署的工程实践
+   - 模型训练、微调、部署、推理优化
+   - AI产品设计、AI应用案例
+   - AI行业动态、公司战略、从业者访谈
+   - 多模态模型、AI图像/视频/音频生成
+   - AI安全、对齐、伦理
 
    不相关主题：
-   - 纯学术论文（无工程实践）
-   - 纯营销内容
-   - 非编程的AI应用（如AI绘画、AI音乐等，除非涉及开发工具）
-   - 传统软件工程（无AI相关）
-   - 一般技术博客（数据库、前端框架、DevOps等，除非与AI编程结合）
+   - 与AI/大模型完全无关的纯软件工程内容
+   - 纯营销/推广内容（无技术实质）
+   - 加密货币、金融等非AI话题
 
 2. 如果相关，评估重要性：
-   - high：深度原创内容、重要工具发布、有独到见解的技术分析
+   - high：深度原创内容、重要模型/工具发布、有独到见解的技术分析
    - medium：有价值的技术分享、教程、经验总结
    - low：简单转述、新闻汇总、浅层介绍
 
-3. 分类（选一个）：AI编程工具, Agent开发, LLM应用开发, RAG与检索, Prompt工程, 模型与推理, 开发实践, 行业动态, 其他
+3. 分类（选一个）：AI编程工具, Agent开发, LLM应用开发, RAG与检索, Prompt工程, 模型与推理, 开发实践, AI应用, 行业动态, 其他
 
 4. 用中文撰写标题和摘要：
    - title_zh：简洁有信息量的中文标题
@@ -89,7 +92,7 @@ async def classify_blog_article(article: BlogArticle) -> FilteredBlogArticle:
 
         base.relevant = data.get("relevant", False)
         if not base.relevant:
-            logger.debug("Blog article not AI-programming related: %s", article.title)
+            logger.info("Blog article not AI-related: %s", article.title)
             return base
 
         base.importance = Importance(data.get("importance", "medium"))

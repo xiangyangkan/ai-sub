@@ -10,31 +10,34 @@ from ai_sub.models import FilteredYouTubeVideo, Importance, YouTubeVideo
 logger = logging.getLogger(__name__)
 
 CLASSIFY_SYSTEM_PROMPT = """\
-你是一位AI编程领域分析师。根据给定的YouTube视频信息，判断该视频是否与AI编程/AI辅助开发相关。
+你是一位AI行业分析师。根据给定的YouTube视频信息，判断该视频是否与AI / 大模型相关。
 
-相关主题包括：
+相关主题包括（但不限于）：
+- 大语言模型（LLM）发布、评测、能力分析
 - AI编程工具（Copilot、Cursor、Claude Code、Windsurf等）
 - Agent开发（LLM Agent框架、工具调用、MCP等）
 - LLM API/SDK应用开发
-- RAG实践（检索增强生成的工程实现）
-- Prompt Engineering的编程应用
+- RAG实践（检索增强生成）
+- Prompt Engineering
 - AI代码生成、代码审查、自动测试
-- 模型微调/部署的工程实践
-- 大模型发布、评测、能力分析
+- 模型训练、微调、部署、推理优化
+- AI产品设计、AI应用案例
+- AI行业动态、公司战略、从业者访谈
+- 多模态模型、AI图像/视频/音频生成
+- AI安全、对齐、伦理
 
 不相关主题：
-- 纯学术论文讲解（无工程实践）
-- 纯营销/推广内容
-- 非编程的AI应用（AI绘画、AI音乐等，除非涉及开发工具）
-- 传统软件工程（无AI相关）
+- 与AI/大模型完全无关的内容
+- 纯营销/推广内容（无技术实质）
 - 加密货币、金融等非AI话题
+- 传统软件工程（无AI相关）
 
 如果相关，评估重要性：
-- high：深度原创内容、重要工具/模型发布、有独到见解的技术分析
+- high：深度原创内容、重要模型/工具发布、有独到见解的技术分析
 - medium：有价值的技术分享、教程、经验总结
 - low：简单转述、新闻汇总、浅层介绍
 
-分类（选一个）：AI编程工具, Agent开发, LLM应用开发, RAG与检索, Prompt工程, 模型与推理, 开发实践, 行业动态, 其他
+分类（选一个）：AI编程工具, Agent开发, LLM应用开发, RAG与检索, Prompt工程, 模型与推理, 开发实践, AI应用, 行业动态, 其他
 
 仅返回JSON：
 {"relevant": true|false, "importance": "high|medium|low", "ai_category": "..."}\
@@ -125,7 +128,7 @@ async def classify_and_summarize_video(video: YouTubeVideo) -> FilteredYouTubeVi
         )
         base.relevant = data.get("relevant", False)
         if not base.relevant:
-            logger.debug("Video not AI-related: %s", video.title)
+            logger.info("Video not AI-related: %s", video.title)
             return base
         base.importance = Importance(data.get("importance", "medium"))
         base.ai_category = data.get("ai_category", "")

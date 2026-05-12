@@ -65,7 +65,7 @@ class Settings(BaseSettings):
     youtube_enabled: bool = True
     youtube_channels_path: str = "config/youtube_channels.yaml"
     youtube_fetch_interval_minutes: int = 120
-    youtube_max_videos_per_channel: int = 1
+    youtube_max_videos_per_channel: int = 3
     youtube_digest_hour_utc: int = 3  # 11 AM Beijing = 3 AM UTC
 
     # YouTube Whisper fallback (when subtitles are disabled)
