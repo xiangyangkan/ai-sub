@@ -45,6 +45,7 @@ from ai_sub.store_youtube import (
     mark_youtube_digested,
     mark_youtube_notified,
     save_youtube_video,
+    save_youtube_video_skipped,
 )
 
 logger = logging.getLogger(__name__)
@@ -290,9 +291,13 @@ async def fetch_and_notify_youtube() -> None:
     for i, video in enumerate(new_videos):
         if i > 0:
             await asyncio.sleep(5)
-        transcript, segments = await fetch_transcript(video.video_id)
+        transcript, segments, permanently_failed = await fetch_transcript(video.video_id)
         if not transcript:
-            logger.warning("Skipping %s (no transcript), will retry next cycle", video.source_id)
+            if permanently_failed:
+                logger.info("Marking %s as seen (subtitles disabled, no fallback)", video.source_id)
+                save_youtube_video_skipped(video)
+            else:
+                logger.warning("Skipping %s (no transcript), will retry next cycle", video.source_id)
             continue
         video.transcript = transcript
         video.transcript_segments = segments

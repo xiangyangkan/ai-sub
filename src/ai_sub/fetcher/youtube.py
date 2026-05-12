@@ -247,11 +247,14 @@ def _whisper_transcribe_sync(video_id: str) -> tuple[str, list[dict]]:
         os.rmdir(tmp_dir)
 
 
-async def fetch_transcript(video_id: str) -> tuple[str, list[dict]]:
+async def fetch_transcript(video_id: str) -> tuple[str, list[dict], bool]:
     """Fetch transcript using youtube-transcript-api, with Whisper fallback.
 
     Uses a lock + delay to serialize requests and avoid YouTube IP blocks.
+    Returns (plain_text, segments, permanently_failed).
+    permanently_failed=True means subtitles are disabled and no fallback is available.
     """
+    from youtube_transcript_api._errors import TranscriptsDisabled
 
     def _sync_fetch() -> tuple[str, list[dict]]:
         ytt = _build_transcript_api()
@@ -263,24 +266,30 @@ async def fetch_transcript(video_id: str) -> tuple[str, list[dict]]:
         plain = " ".join(s.text for s in transcript)
         return plain, segments
 
+    subtitles_disabled = False
+
     async with _transcript_lock:
         try:
             result = await asyncio.to_thread(_sync_fetch)
             await asyncio.sleep(3)
-            return result
+            return result[0], result[1], False
+        except TranscriptsDisabled:
+            logger.warning("Subtitles are disabled for %s", video_id)
+            subtitles_disabled = True
         except Exception as e:
             logger.warning("Failed to fetch transcript for %s: %s", video_id, e)
 
-        if settings.youtube_whisper_fallback and settings.openai_api_key:
+        if (subtitles_disabled or True) and settings.youtube_whisper_fallback and settings.openai_api_key:
             logger.info("Attempting Whisper fallback for %s", video_id)
             try:
                 result = await asyncio.to_thread(_whisper_transcribe_sync, video_id)
                 await asyncio.sleep(3)
                 if result[0]:
                     logger.info("Whisper transcription successful for %s", video_id)
-                    return result
+                    return result[0], result[1], False
             except Exception as e:
                 logger.warning("Whisper fallback failed for %s: %s", video_id, e)
 
         await asyncio.sleep(3)
-        return "", []
+        permanently_failed = subtitles_disabled and not settings.youtube_whisper_fallback
+        return "", [], permanently_failed

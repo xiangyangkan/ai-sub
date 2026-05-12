@@ -176,7 +176,59 @@ def _format_youtube_video(v: FilteredYouTubeVideo) -> str:
     return "\n".join(lines)
 
 
+def _format_youtube_caption(v: FilteredYouTubeVideo) -> str:
+    """Short caption for photo message (max 1024 chars)."""
+    label = IMPORTANCE_LABEL.get(v.importance, IMPORTANCE_LABEL[Importance.MEDIUM])
+    e = html.escape
+    title = v.title_zh or v.title
+    cat_tag = f"[{e(v.ai_category)}] " if v.ai_category else ""
+    lines = [
+        f"{label} {cat_tag}{e(title)}",
+        f"<i>{e(v.channel_name)}</i>",
+        "",
+        f'<a href="{e(v.url)}">观看视频</a>',
+    ]
+    return "\n".join(lines)
+
+
+async def send_telegram_photo(
+    photo_bytes: bytes,
+    caption: str = "",
+    chat_id: str | None = None,
+    message_thread_id: int | None = None,
+) -> None:
+    target_chat_id = chat_id or settings.telegram_chat_id
+    url = f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendPhoto"
+
+    data: dict[str, str | int] = {
+        "chat_id": target_chat_id,
+        "parse_mode": "HTML",
+    }
+    if caption:
+        data["caption"] = caption[:1024]
+    if message_thread_id is not None:
+        data["message_thread_id"] = message_thread_id
+
+    files = {"photo": ("card.png", photo_bytes, "image/png")}
+    resp = await _get_client().post(url, data=data, files=files)
+    if resp.status_code != 200:
+        logger.error("Telegram sendPhoto error %d: %s", resp.status_code, resp.text)
+        resp.raise_for_status()
+
+    logger.info("Telegram photo notification sent")
+
+
 async def send_telegram_youtube(video: FilteredYouTubeVideo) -> None:
-    text = _format_youtube_video(video)
     thread_id = get_thread_id("youtube", video.importance.value)
-    await send_telegram_raw(text, message_thread_id=thread_id)
+
+    card_bytes = None
+    if settings.card_image_enabled:
+        from ai_sub.notifier.card_renderer import render_youtube_card
+        card_bytes = await render_youtube_card(video)
+
+    if card_bytes:
+        caption = _format_youtube_caption(video)
+        await send_telegram_photo(card_bytes, caption, message_thread_id=thread_id)
+    else:
+        text = _format_youtube_video(video)
+        await send_telegram_raw(text, message_thread_id=thread_id)

@@ -79,6 +79,9 @@ class Settings(BaseSettings):
     # YouTube 通知频道
     feishu_youtube_webhook_url: str = ""
 
+    # Card image generation
+    card_image_enabled: bool = True
+
     log_level: str = "INFO"
 
     @property

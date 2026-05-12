@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from ai_sub.config import settings
-from ai_sub.models import FilteredYouTubeVideo
+from ai_sub.models import FilteredYouTubeVideo, YouTubeVideo
 
 logger = logging.getLogger(__name__)
 
@@ -117,6 +117,27 @@ def mark_youtube_digested(source_ids: list[str]) -> None:
         conn.executemany(
             "UPDATE seen_youtube_videos SET digest_included_at = ? WHERE source_id = ?",
             [(now, sid) for sid in source_ids],
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def save_youtube_video_skipped(v: YouTubeVideo) -> None:
+    """Mark a video as seen without LLM results (e.g. subtitles permanently disabled)."""
+    conn = _get_conn()
+    try:
+        conn.execute(
+            """INSERT OR IGNORE INTO seen_youtube_videos
+            (source_id, video_id, channel_name, category, title, url,
+             description, published_date, fetched_at, relevant)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)""",
+            (
+                v.source_id, v.video_id, v.channel_name, v.category,
+                v.title, v.url, v.description,
+                v.published_date.isoformat() if v.published_date else None,
+                datetime.now(timezone.utc).isoformat(),
+            ),
         )
         conn.commit()
     finally:
