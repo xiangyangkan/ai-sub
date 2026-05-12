@@ -69,7 +69,7 @@ class Settings(BaseSettings):
     youtube_digest_hour_utc: int = 3  # 11 AM Beijing = 3 AM UTC
 
     # YouTube Whisper fallback (when subtitles are disabled)
-    youtube_whisper_fallback: bool = True
+    youtube_whisper_fallback: bool = False
     whisper_model: str = "whisper-1"
 
     # YouTube proxy (Webshare residential rotating proxy)
