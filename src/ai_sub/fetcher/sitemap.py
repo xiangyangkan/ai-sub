@@ -44,6 +44,7 @@ class SitemapSource:
     notify_as: str = "blog"  # "blog" or "release"
     fetch_interval_minutes: int = 0  # 0 = use global default
     max_age_hours: int = 48  # 0 = no age filtering
+    listing_page: bool = False  # True = scrape HTML listing page for links instead of parsing XML sitemap
 
 
 def load_sitemap_sources(path: str) -> list[SitemapSource]:
@@ -66,6 +67,7 @@ def load_sitemap_sources(path: str) -> list[SitemapSource]:
             notify_as=item.get("notify_as", "blog"),
             fetch_interval_minutes=item.get("fetch_interval_minutes", 0),
             max_age_hours=item.get("max_age_hours", 48),
+            listing_page=item.get("listing_page", False),
         ))
 
     logger.info("Loaded %d sitemap sources from %s", len(sources), path)
@@ -149,53 +151,100 @@ def _extract_meta(html: str) -> tuple[str, str, datetime | None]:
     return title, description, published_date
 
 
+def _extract_listing_links(html: str, base_url: str, path_prefixes: list[str]) -> list[str]:
+    """Extract article links from an HTML listing page."""
+    parsed_base = urlparse(base_url)
+    base_origin = f"{parsed_base.scheme}://{parsed_base.netloc}"
+
+    urls: list[str] = []
+    seen: set[str] = set()
+    for m in re.finditer(r'<a\s[^>]*href=["\']([^"\']+)["\']', html, re.IGNORECASE):
+        href = m.group(1)
+        if href.startswith("/"):
+            full_url = base_origin + href
+            path = href
+        elif href.startswith(base_origin):
+            full_url = href
+            path = urlparse(href).path
+        else:
+            continue
+
+        if not path_prefixes or any(path.startswith(p) for p in path_prefixes):
+            # Require at least one additional path segment beyond the prefix
+            for prefix in (path_prefixes or ["/"]):
+                if path.startswith(prefix):
+                    remainder = path[len(prefix):].strip("/")
+                    if remainder and "/" not in remainder:
+                        normalized = normalize_url(full_url)
+                        if normalized not in seen:
+                            seen.add(normalized)
+                            urls.append(full_url)
+                    break
+
+    return urls
+
+
 async def fetch_sitemap_articles(
     client: httpx.AsyncClient, source: SitemapSource
 ) -> list[BlogArticle]:
-    """Fetch articles from a single sitemap source."""
+    """Fetch articles from a single sitemap source or HTML listing page."""
     try:
-        resp = await client.get(source.sitemap_url, timeout=20, follow_redirects=True)
+        resp = await client.get(
+            source.sitemap_url, timeout=20, follow_redirects=True,
+            headers=SITEMAP_HEADERS,
+        )
         resp.raise_for_status()
     except httpx.HTTPError as e:
-        logger.warning("Failed to fetch sitemap %s: %s", source.name, e)
+        logger.warning("Failed to fetch %s: %s", source.name, e)
         return []
 
-    try:
-        root = ET.fromstring(resp.text)
-    except ET.ParseError as e:
-        logger.warning("Failed to parse sitemap XML %s: %s", source.name, e)
-        return []
+    if source.listing_page:
+        # HTML listing page mode: extract links from the page
+        link_urls = _extract_listing_links(resp.text, source.sitemap_url, source.path_prefixes)
+        entries: list[tuple[str, datetime | None]] = [(url, None) for url in link_urls]
+        entries = entries[:source.max_articles]
+        if not entries:
+            logger.debug("No matching links in listing page %s", source.name)
+            return []
+        logger.info("Found %d matching links in listing page %s", len(entries), source.name)
+    else:
+        # Standard sitemap XML mode
+        try:
+            root = ET.fromstring(resp.text)
+        except ET.ParseError as e:
+            logger.warning("Failed to parse sitemap XML %s: %s", source.name, e)
+            return []
 
-    # Auto-detect sitemap namespace from root tag (handles http:// vs https:// variants)
-    ns = dict(NS)
-    m = re.match(r"\{(.*)\}", root.tag)
-    if m:
-        ns["sm"] = m.group(1)
+        # Auto-detect sitemap namespace from root tag (handles http:// vs https:// variants)
+        ns = dict(NS)
+        m = re.match(r"\{(.*)\}", root.tag)
+        if m:
+            ns["sm"] = m.group(1)
 
-    # Collect matching URLs with lastmod
-    entries: list[tuple[str, datetime | None]] = []
-    for url_elem in root.findall("sm:url", ns):
-        loc = url_elem.findtext("sm:loc", namespaces=ns)
-        if not loc:
-            continue
+        # Collect matching URLs with lastmod
+        entries = []
+        for url_elem in root.findall("sm:url", ns):
+            loc = url_elem.findtext("sm:loc", namespaces=ns)
+            if not loc:
+                continue
 
-        path = urlparse(loc).path
-        if source.path_prefixes and not any(path.startswith(p) for p in source.path_prefixes):
-            continue
+            path = urlparse(loc).path
+            if source.path_prefixes and not any(path.startswith(p) for p in source.path_prefixes):
+                continue
 
-        lastmod = _parse_lastmod(
-            url_elem.findtext("sm:lastmod", namespaces=ns)
-            or url_elem.findtext("news:news/news:publication_date", namespaces=ns)
-        )
-        entries.append((loc, lastmod))
+            lastmod = _parse_lastmod(
+                url_elem.findtext("sm:lastmod", namespaces=ns)
+                or url_elem.findtext("news:news/news:publication_date", namespaces=ns)
+            )
+            entries.append((loc, lastmod))
 
-    # Sort by lastmod descending (None last)
-    entries.sort(key=lambda e: e[1] or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
-    entries = entries[:source.max_articles]
+        # Sort by lastmod descending (None last)
+        entries.sort(key=lambda e: e[1] or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
+        entries = entries[:source.max_articles]
 
-    if not entries:
-        logger.debug("No matching URLs in sitemap %s", source.name)
-        return []
+        if not entries:
+            logger.debug("No matching URLs in sitemap %s", source.name)
+            return []
 
     logger.info("Found %d matching URLs in sitemap %s", len(entries), source.name)
 
