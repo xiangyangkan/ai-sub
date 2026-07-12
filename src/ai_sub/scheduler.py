@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import datetime, timezone
 
 import httpx
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -70,6 +71,19 @@ def _should_push(importance: Importance, allowed: set[Importance]) -> bool:
     return settings.backfill_active or importance in allowed
 
 
+def _order_for_push(items: list) -> list:
+    """Order a batch of fetched items for notification.
+
+    In backfill mode, push oldest-first so the channel timeline reads
+    chronologically (undated items lead). Normal mode keeps the source order
+    (newest-first), so live pushes are unchanged.
+    """
+    if not settings.backfill_active:
+        return items
+    epoch = datetime.min.replace(tzinfo=timezone.utc)
+    return sorted(items, key=lambda x: x.published_date or epoch)
+
+
 async def fetch_and_notify() -> None:
     """Fetch from all sources, filter, classify, and notify."""
     logger.info("Starting fetch cycle")
@@ -93,7 +107,7 @@ async def fetch_and_notify() -> None:
         return
 
     # Classify and notify
-    for item in new_items:
+    for item in _order_for_push(new_items):
         filtered = await classify_and_translate(item)
         save_release(filtered)
 
@@ -143,7 +157,7 @@ async def fetch_and_notify_blogs() -> None:
     new_blogs = [a for a in blog_articles if not is_blog_seen(a.source_id)]
     logger.info("Found %d new blog articles out of %d total", len(new_blogs), len(blog_articles))
 
-    for article in new_blogs:
+    for article in _order_for_push(new_blogs):
         filtered = await classify_blog_article(article)
         save_blog_article(filtered)
 
@@ -162,7 +176,7 @@ async def fetch_and_notify_blogs() -> None:
     new_releases = [a for a in release_articles if not is_seen(a.source_id)]
     logger.info("Found %d new release articles from RSS out of %d total", len(new_releases), len(release_articles))
 
-    for article in new_releases:
+    for article in _order_for_push(new_releases):
         release_item = ReleaseItem(
             source_id=article.source_id,
             vendor=article.blog_name,
@@ -215,7 +229,7 @@ async def _process_sitemap_as_release(source: SitemapSource, all_articles: list)
     if not new_articles:
         return
 
-    for article in new_articles:
+    for article in _order_for_push(new_articles):
         release_item = ReleaseItem(
             source_id=article.source_id,
             vendor=article.blog_name,
@@ -248,7 +262,7 @@ async def _process_sitemap_as_blog(source: SitemapSource, all_articles: list) ->
     if not new_articles:
         return
 
-    for article in new_articles:
+    for article in _order_for_push(new_articles):
         filtered = await classify_blog_article(article)
         save_blog_article(filtered)
 
@@ -300,7 +314,7 @@ async def fetch_and_notify_youtube() -> None:
     if not new_videos:
         return
 
-    for i, video in enumerate(new_videos):
+    for i, video in enumerate(_order_for_push(new_videos)):
         if i > 0:
             await asyncio.sleep(5)
         transcript, segments, permanently_failed = await fetch_transcript(video.video_id)
