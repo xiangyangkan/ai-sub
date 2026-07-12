@@ -69,17 +69,14 @@ def _parse_date(entry: dict) -> datetime | None:
         raw = entry.get(key)
         if not raw:
             continue
-        try:
-            return parsedate_to_datetime(raw)
-        except Exception:
-            pass
-        try:
-            dt = datetime.fromisoformat(raw)
-            if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=timezone.utc)
-            return dt
-        except Exception:
-            pass
+        for parse in (parsedate_to_datetime, datetime.fromisoformat):
+            try:
+                dt = parse(raw)
+            except Exception:
+                continue
+            # Guarantee tz-aware so downstream comparisons (e.g. backfill cutoff)
+            # never mix naive/aware datetimes. RFC-822 "-0000" yields naive.
+            return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
     return None
 
 
@@ -115,11 +112,18 @@ async def _fetch_single_feed(
         return []
 
     articles: list[BlogArticle] = []
-    limit = settings.blog_max_articles_per_feed
+    cutoff = settings.backfill_cutoff
+    limit = settings.backfill_max_items if cutoff else settings.blog_max_articles_per_feed
 
     for entry in parsed.entries[:limit]:
         entry_id = entry.get("id") or entry.get("link") or entry.get("title", "")
         if not entry_id:
+            continue
+
+        # Backfill: skip entries published before the cutoff (undated entries
+        # are kept since a feed only exposes a bounded set of recent items).
+        published = _parse_date(entry)
+        if cutoff and published and published < cutoff:
             continue
 
         link = normalize_url(entry.get("link") or feed.html_url)
@@ -134,7 +138,7 @@ async def _fetch_single_feed(
             title=entry.get("title", ""),
             url=link,
             summary=summary_text or entry.get("title", ""),
-            published_date=_parse_date(entry),
+            published_date=published,
             content=content_text or None,
             notify_as=feed.notify_as,
         ))

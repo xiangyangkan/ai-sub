@@ -99,6 +99,7 @@ Key optional settings:
 - `RELEASE_ENABLED`, `BLOG_ENABLED`, `SITEMAP_ENABLED`, `YOUTUBE_ENABLED` — toggle individual pipelines
 - `*_FETCH_INTERVAL_MINUTES` — per-pipeline fetch frequency
 - `VENDORS_T0`, `VENDORS_T1`, `VENDORS_T2` — JSON arrays for tier membership
+- `BACKFILL_ENABLED` (default `false`) — opt-in switch; when off, all pipelines keep the original "latest N per source" behavior. When `true`, they fetch **every** item published on/after `BACKFILL_SINCE` (ISO date, e.g. `2026-06-01`), bypassing the per-source count limits. `BACKFILL_MAX_ITEMS` caps items per source per cycle.
 
 Full config defined in `src/ai_sub/config.py:Settings`.
 

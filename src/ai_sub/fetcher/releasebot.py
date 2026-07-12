@@ -80,7 +80,8 @@ def _parse_sveltekit(payload: dict, vendor: str) -> list[ReleaseItem]:
     if not isinstance(release_indices, list):
         return []
 
-    limit = settings.max_releases_per_vendor
+    cutoff = settings.backfill_cutoff
+    limit = settings.backfill_max_items if cutoff else settings.max_releases_per_vendor
     for ridx in release_indices[:limit]:
         if not isinstance(ridx, int) or ridx >= len(data_array):
             continue
@@ -92,6 +93,10 @@ def _parse_sveltekit(payload: dict, vendor: str) -> list[ReleaseItem]:
             rel = _resolve(data_array, release_shape, 0)
             item = _build_item(rel, vendor)
             if item:
+                # Backfill: keep everything on/after the cutoff (undated items
+                # are kept — the recent-updates list is already bounded).
+                if cutoff and item.published_date and item.published_date < cutoff:
+                    continue
                 items.append(item)
         except Exception as e:
             logger.debug("Failed to parse release at index %d for %s: %s", ridx, vendor, e)

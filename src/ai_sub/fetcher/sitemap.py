@@ -15,6 +15,8 @@ import yaml
 
 from ai_sub.config import settings
 from ai_sub.models import BlogArticle
+from ai_sub.store_blog import is_blog_seen
+from ai_sub.store_release import is_seen
 from ai_sub.url import normalize_url
 
 logger = logging.getLogger(__name__)
@@ -191,13 +193,34 @@ async def fetch_sitemap_articles(
 
     # Sort by lastmod descending (None last)
     entries.sort(key=lambda e: e[1] or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
-    entries = entries[:source.max_articles]
+
+    cutoff = settings.backfill_cutoff
+    if cutoff:
+        # Backfill: keep every URL whose lastmod is on/after the cutoff. A known
+        # lastmod is required so we never fetch an entire sitemap of undated URLs.
+        entries = [e for e in entries if e[1] is not None and e[1] >= cutoff]
+        entries = entries[:settings.backfill_max_items]
+    else:
+        entries = entries[:source.max_articles]
 
     if not entries:
         logger.debug("No matching URLs in sitemap %s", source.name)
         return []
 
-    logger.info("Found %d matching URLs in sitemap %s", len(entries), source.name)
+    # Skip URLs already stored so a standing backfill doesn't re-download
+    # historical pages every cycle (the scheduler still dedups afterwards).
+    seen_check = is_seen if source.notify_as == "release" else is_blog_seen
+    before_dedup = len(entries)
+    entries = [(loc, lm) for loc, lm in entries if not seen_check(_make_source_id(source.name, loc))]
+    skipped_seen = before_dedup - len(entries)
+    if skipped_seen:
+        logger.info("[%s] Skipping %d already-seen URLs", source.name, skipped_seen)
+
+    if not entries:
+        logger.debug("All matching URLs already seen for sitemap %s", source.name)
+        return []
+
+    logger.info("Found %d new matching URLs in sitemap %s", len(entries), source.name)
 
     # Fetch page metadata concurrently
     semaphore = asyncio.Semaphore(5)
@@ -239,13 +262,16 @@ async def fetch_sitemap_articles(
         elif isinstance(result, Exception):
             logger.debug("Page fetch error: %s", result)
 
-    # Filter out articles older than max_age_hours
-    if source.max_age_hours > 0:
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=source.max_age_hours)
+    # Filter out old articles. A backfill cutoff (if set) takes precedence over
+    # the rolling max_age_hours window.
+    age_cutoff = settings.backfill_cutoff
+    if age_cutoff is None and source.max_age_hours > 0:
+        age_cutoff = datetime.now(timezone.utc) - timedelta(hours=source.max_age_hours)
+    if age_cutoff is not None:
         before = len(articles)
-        articles = [a for a in articles if a.published_date is None or a.published_date >= cutoff]
+        articles = [a for a in articles if a.published_date is None or a.published_date >= age_cutoff]
         skipped = before - len(articles)
         if skipped:
-            logger.info("Filtered %d old articles from %s (cutoff: %s)", skipped, source.name, cutoff.isoformat())
+            logger.info("Filtered %d old articles from %s (cutoff: %s)", skipped, source.name, age_cutoff.isoformat())
 
     return articles

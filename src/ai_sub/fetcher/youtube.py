@@ -126,12 +126,17 @@ async def _fetch_channel_feed(
                 published_date=published,
             ))
 
-        max_per = settings.youtube_max_videos_per_channel
         videos.sort(
             key=lambda v: v.published_date or datetime.min.replace(tzinfo=timezone.utc),
             reverse=True,
         )
-        return videos[:max_per]
+        cutoff = settings.backfill_cutoff
+        if cutoff:
+            # Backfill: keep every video on/after the cutoff (undated kept),
+            # capped for safety. YouTube RSS only exposes ~15 recent videos.
+            videos = [v for v in videos if v.published_date is None or v.published_date >= cutoff]
+            return videos[:settings.backfill_max_items]
+        return videos[:settings.youtube_max_videos_per_channel]
 
 
 async def fetch_youtube_videos() -> list[YouTubeVideo]:

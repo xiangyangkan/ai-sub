@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from pydantic_settings import BaseSettings
 
 
@@ -28,6 +30,20 @@ class Settings(BaseSettings):
 
     # Database (shared)
     db_path: str = "data/releases.db"
+
+    # ── Backfill (shared) ──
+    # Backfill is fully opt-in and OFF by default: when disabled, every fetcher
+    # behaves exactly as before (latest N per source via the count limits below).
+    # When enabled, fetchers instead pull ALL items published on/after
+    # `backfill_since`. SQLite dedup skips already-seen items, so no
+    # re-notification happens. After the initial backfill you can turn it back
+    # off to save work.
+    backfill_enabled: bool = False
+    # ISO date cutoff, used only when backfill is enabled (e.g. "2026-06-01").
+    backfill_since: str = "2026-06-01"
+    # Safety cap: max items a single source will backfill per cycle (guards
+    # against very large sitemaps / feeds).
+    backfill_max_items: int = 500
 
     # ── Release 数据源 ──
     release_enabled: bool = True
@@ -83,6 +99,21 @@ class Settings(BaseSettings):
     card_image_enabled: bool = True
 
     log_level: str = "INFO"
+
+    @property
+    def backfill_cutoff(self) -> datetime | None:
+        """Parsed `backfill_since`, or None when backfill is off/misconfigured.
+
+        Returns None unless backfill is explicitly enabled AND the date parses,
+        so every fetcher falls back to its original count-limited behavior.
+        """
+        if not self.backfill_enabled or not self.backfill_since:
+            return None
+        try:
+            dt = datetime.fromisoformat(self.backfill_since)
+        except ValueError:
+            return None
+        return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
 
     @property
     def all_vendors(self) -> list[str]:
