@@ -116,6 +116,11 @@ class Settings(BaseSettings):
         return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
 
     @property
+    def backfill_active(self) -> bool:
+        """True when backfill is enabled with a valid cutoff date."""
+        return self.backfill_cutoff is not None
+
+    @property
     def all_vendors(self) -> list[str]:
         return self.vendors_t0 + self.vendors_t1 + self.vendors_t2
 

@@ -57,6 +57,18 @@ TIER_ALLOWED = {
     "t2": {Importance.HIGH},
 }
 
+# Default push threshold for blog / sitemap / YouTube pipelines
+HIGH_MEDIUM = {Importance.HIGH, Importance.MEDIUM}
+
+
+def _should_push(importance: Importance, allowed: set[Importance]) -> bool:
+    """Whether to push a relevant item to the notification channels.
+
+    In backfill mode importance is ignored and every relevant item is pushed
+    (full backfill); otherwise the normal importance threshold applies.
+    """
+    return settings.backfill_active or importance in allowed
+
 
 async def fetch_and_notify() -> None:
     """Fetch from all sources, filter, classify, and notify."""
@@ -91,7 +103,7 @@ async def fetch_and_notify() -> None:
         tier = settings.vendor_tier(filtered.vendor)
         allowed = TIER_ALLOWED.get(tier, TIER_ALLOWED["t2"])
 
-        if filtered.importance in allowed:
+        if _should_push(filtered.importance, allowed):
             try:
                 await notify_all(filtered)
                 mark_notified(filtered.source_id)
@@ -138,8 +150,8 @@ async def fetch_and_notify_blogs() -> None:
         if not filtered.relevant:
             continue
 
-        # Push HIGH and MEDIUM articles
-        if filtered.importance in {Importance.HIGH, Importance.MEDIUM}:
+        # Push HIGH and MEDIUM articles (backfill mode pushes all relevant ones)
+        if _should_push(filtered.importance, HIGH_MEDIUM):
             try:
                 await notify_blog(filtered)
                 mark_blog_notified(filtered.source_id)
@@ -167,7 +179,7 @@ async def fetch_and_notify_blogs() -> None:
         if not filtered_release.relevant:
             continue
 
-        if filtered_release.importance in {Importance.HIGH, Importance.MEDIUM}:
+        if _should_push(filtered_release.importance, HIGH_MEDIUM):
             try:
                 await notify_all(filtered_release)
                 mark_notified(filtered_release.source_id)
@@ -220,7 +232,7 @@ async def _process_sitemap_as_release(source: SitemapSource, all_articles: list)
         if not filtered.relevant:
             continue
 
-        if filtered.importance in {Importance.HIGH, Importance.MEDIUM}:
+        if _should_push(filtered.importance, HIGH_MEDIUM):
             try:
                 await notify_all(filtered)
                 mark_notified(filtered.source_id)
@@ -243,7 +255,7 @@ async def _process_sitemap_as_blog(source: SitemapSource, all_articles: list) ->
         if not filtered.relevant:
             continue
 
-        if filtered.importance in {Importance.HIGH, Importance.MEDIUM}:
+        if _should_push(filtered.importance, HIGH_MEDIUM):
             try:
                 await notify_blog(filtered)
                 mark_blog_notified(filtered.source_id)
@@ -308,7 +320,7 @@ async def fetch_and_notify_youtube() -> None:
         if not filtered.relevant:
             continue
 
-        if filtered.importance in {Importance.HIGH, Importance.MEDIUM}:
+        if _should_push(filtered.importance, HIGH_MEDIUM):
             try:
                 await notify_youtube(filtered)
                 mark_youtube_notified(filtered.source_id)
