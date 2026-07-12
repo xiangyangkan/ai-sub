@@ -15,7 +15,6 @@ sitemaps:
     path_prefixes:
       - /research/
       - /engineering/
-      - /blog/
     max_articles: 3
     fetch_interval_minutes: 120
     max_age_hours: 48
@@ -29,6 +28,17 @@ sitemaps:
     max_articles: 3
     fetch_interval_minutes: 10
     max_age_hours: 48
+
+  - name: Claude Blog
+    category: Anthropic Engineering
+    notify_as: blog
+    listing_page: true
+    sitemap_url: https://claude.com/blog
+    path_prefixes:
+      - /blog/
+    max_articles: 5
+    fetch_interval_minutes: 120
+    max_age_hours: 72
 
   - name: Google AI
     category: AI News
